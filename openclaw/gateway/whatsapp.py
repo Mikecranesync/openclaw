@@ -30,10 +30,16 @@ class WhatsAppAdapter(ChannelAdapter):
     async def send(self, message: OutboundMessage) -> None:
         if not self._client:
             return
-        await self._client.post(
-            "/send",
-            json={"to": message.user_id, "text": message.text},
-        )
+        try:
+            resp = await self._client.post(
+                "/send",
+                json={"to": message.user_id, "text": message.text},
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            logger.error("WhatsApp send failed: %s %s", resp.status_code, resp.text)
+        except httpx.HTTPError as e:
+            logger.error("WhatsApp send error: %s", e)
 
     def name(self) -> str:
         return "whatsapp"

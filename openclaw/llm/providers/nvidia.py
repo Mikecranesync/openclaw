@@ -47,6 +47,7 @@ class NvidiaProvider(LLMProvider):
                         "model": model,
                         "messages": all_messages,
                         "max_tokens": max_tokens,
+                        "temperature": temperature,
                     },
                 )
                 resp.raise_for_status()

@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import logging
+
 from openclaw.messages.models import InboundMessage, OutboundMessage
 from openclaw.skills.base import Skill, SkillContext
 from openclaw.types import Intent
+
+logger = logging.getLogger(__name__)
 
 
 class WorkOrderSkill(Skill):
@@ -27,10 +32,10 @@ class WorkOrderSkill(Skill):
             json_mode=True,
         )
 
-        import json
         try:
             wo_data = json.loads(response.text)
         except json.JSONDecodeError:
+            logger.warning("LLM returned invalid JSON for work order extraction: %s", response.text[:200])
             wo_data = {"title": message.text[:100], "description": message.text, "priority": "MEDIUM"}
 
         result = await cmms.create_work_order(  # type: ignore[attr-defined]

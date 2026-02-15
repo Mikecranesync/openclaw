@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import google.generativeai as genai
 
 from openclaw.llm.base import LLMProvider, LLMResponse
@@ -32,14 +34,16 @@ class GeminiProvider(LLMProvider):
         for msg in messages:
             prompt += msg.get("content", "") + "\n"
 
-        resp = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens, temperature=temperature),
-        )
+        gen_config = genai.types.GenerationConfig(max_output_tokens=max_tokens, temperature=temperature)
+        resp = await asyncio.to_thread(model.generate_content, prompt, generation_config=gen_config)
+        tokens_used = 0
+        if hasattr(resp, "usage_metadata") and resp.usage_metadata:
+            tokens_used = getattr(resp.usage_metadata, "total_token_count", 0)
         return LLMResponse(
             text=resp.text or "",
             model=self._model_name,
             provider="gemini",
+            tokens_used=tokens_used,
         )
 
     async def complete_with_vision(
@@ -56,11 +60,15 @@ class GeminiProvider(LLMProvider):
             text_prompt += messages[-1].get("content", "Analyze this image.")
         parts.append(text_prompt)
 
-        resp = model.generate_content(parts)
+        resp = await asyncio.to_thread(model.generate_content, parts)
+        tokens_used = 0
+        if hasattr(resp, "usage_metadata") and resp.usage_metadata:
+            tokens_used = getattr(resp.usage_metadata, "total_token_count", 0)
         return LLMResponse(
             text=resp.text or "",
             model=self._model_name,
             provider="gemini",
+            tokens_used=tokens_used,
         )
 
     def name(self) -> str:

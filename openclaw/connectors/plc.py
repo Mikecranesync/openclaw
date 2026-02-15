@@ -25,7 +25,10 @@ class PLCConnector(ServiceConnector):
 
     async def disconnect(self) -> None:
         if self._client:
-            self._client.close()
+            try:
+                await self._client.close()
+            except Exception:
+                pass
             self._client = None
 
     async def read_tags(self) -> dict:

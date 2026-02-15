@@ -66,6 +66,7 @@ class LLMRouter:
         route = self.routes.get(intent, Route("groq", ["openai"]))
         candidates = [route.primary] + route.fallbacks
 
+        attempted = []
         for provider_name in candidates:
             provider = self.providers.get(provider_name)
             if not provider or not provider.is_available():
@@ -76,6 +77,7 @@ class LLMRouter:
             if images and not provider.supports_vision():
                 continue
 
+            attempted.append(provider_name)
             try:
                 response = await self._call(provider, messages, system_prompt, images, max_tokens, temperature)
                 self.budget.record(provider_name, response.tokens_used)
@@ -84,7 +86,10 @@ class LLMRouter:
                 logger.exception("Provider %s failed, trying fallback", provider_name)
                 continue
 
-        raise RuntimeError(f"All LLM providers exhausted for intent={intent.value}")
+        raise RuntimeError(
+            f"All LLM providers exhausted for intent={intent.value}, "
+            f"tried: {attempted or candidates}"
+        )
 
     async def _call(
         self,
