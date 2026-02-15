@@ -74,8 +74,9 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
 
     # -- Connectors --
     connectors: dict = {}
-    matrix = MatrixConnector(config.matrix_url)
-    connectors["matrix"] = matrix
+    if config.matrix_url:
+        matrix = MatrixConnector(config.matrix_url)
+        connectors["matrix"] = matrix
     if config.jarvis_hosts:
         connectors["jarvis"] = JarvisConnector(config.jarvis_hosts)
     if config.cmms_url:
