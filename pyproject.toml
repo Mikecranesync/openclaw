@@ -29,6 +29,9 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23.0", "ruff>=0.3.0"]
 [project.scripts]
 openclaw = "openclaw.__main__:main"
 
+[tool.setuptools.packages.find]
+include = ["openclaw*"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
