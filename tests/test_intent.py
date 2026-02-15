@@ -40,5 +40,11 @@ def test_help_intent():
     assert classify(_msg("/start")) == Intent.HELP
 
 
+def test_search_intent():
+    assert classify(_msg("/search latest PLC news")) == Intent.SEARCH
+    assert classify(_msg("search for motor specs")) == Intent.SEARCH
+    assert classify(_msg("look up Allen-Bradley pricing")) == Intent.SEARCH
+
+
 def test_chat_fallback():
     assert classify(_msg("hello how are you")) == Intent.CHAT

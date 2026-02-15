@@ -33,8 +33,9 @@ class SkillRegistry:
         from openclaw.skills.builtin.chat import ChatSkill
         from openclaw.skills.builtin.diagnose import DiagnoseSkill
         from openclaw.skills.builtin.photo import PhotoSkill
+        from openclaw.skills.builtin.search import SearchSkill
         from openclaw.skills.builtin.status import StatusSkill
         from openclaw.skills.builtin.work_order import WorkOrderSkill
 
-        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, ChatSkill]:
+        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ChatSkill]:
             self.register(skill_cls())

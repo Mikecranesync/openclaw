@@ -21,14 +21,15 @@ class Route:
 
 # Default routing table
 DEFAULT_ROUTES: dict[Intent, Route] = {
-    Intent.DIAGNOSE: Route("groq", ["nvidia", "openai"]),
+    Intent.DIAGNOSE: Route("openrouter", ["groq", "nvidia", "openai"]),
     Intent.STATUS: Route("groq", ["openai"]),
-    Intent.PHOTO: Route("gemini", ["openai"]),
-    Intent.WORK_ORDER: Route("anthropic", ["openai", "groq"]),
-    Intent.CHAT: Route("groq", ["openai"]),
+    Intent.PHOTO: Route("gemini", ["openai", "openrouter"]),
+    Intent.WORK_ORDER: Route("openrouter", ["anthropic", "openai", "groq"]),
+    Intent.CHAT: Route("groq", ["openrouter", "openai"]),
+    Intent.SEARCH: Route("groq", []),
     Intent.ADMIN: Route("groq", []),
     Intent.HELP: Route("groq", []),
-    Intent.UNKNOWN: Route("groq", ["openai"]),
+    Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
 }
 
 

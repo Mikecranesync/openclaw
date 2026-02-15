@@ -24,6 +24,7 @@ from openclaw.llm.providers.gemini import GeminiProvider
 from openclaw.llm.providers.groq import GroqProvider
 from openclaw.llm.providers.nvidia import NvidiaProvider
 from openclaw.llm.providers.openai import OpenAIProvider
+from openclaw.llm.providers.openrouter import OpenRouterProvider
 from openclaw.llm.router import LLMRouter
 from openclaw.messages.intent import classify
 from openclaw.messages.models import InboundMessage, OutboundMessage
@@ -56,10 +57,18 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
         providers["openai"] = OpenAIProvider(config.openai_api_key, config.openai_model)
     if config.gemini_api_key:
         providers["gemini"] = GeminiProvider(config.gemini_api_key, config.gemini_model)
+    if config.openrouter_api_key:
+        providers["openrouter"] = OpenRouterProvider(config.openrouter_api_key, config.openrouter_model)
 
     budget = BudgetTracker()
     if config.groq_daily_request_limit:
         budget.configure("groq", daily_request_limit=config.groq_daily_request_limit)
+    if config.openrouter_daily_request_limit or config.openrouter_daily_token_limit:
+        budget.configure(
+            "openrouter",
+            daily_request_limit=config.openrouter_daily_request_limit,
+            daily_token_limit=config.openrouter_daily_token_limit,
+        )
 
     llm_router = LLMRouter(providers, budget)
 

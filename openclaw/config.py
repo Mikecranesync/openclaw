@@ -57,6 +57,14 @@ class OpenClawConfig(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-20250514"
     openai_model: str = "gpt-4o"
     gemini_model: str = "gemini-2.5-flash"
+    openrouter_api_key: str = ""
+    openrouter_model: str = "anthropic/claude-sonnet-4"
+    openrouter_daily_request_limit: int = 500
+    openrouter_daily_token_limit: int = 500_000
+
+    # Perplexity Search
+    perplexity_api_key: str = ""
+    perplexity_search_model: str = "sonar-pro"
 
     # LLM routes (populated from YAML)
     llm_routes: dict[str, dict[str, Any]] = Field(default_factory=dict)

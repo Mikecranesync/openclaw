@@ -22,6 +22,14 @@ openclaw:
   openai_model: "gpt-4o"
   gemini_model: "gemini-2.5-flash"
 
+  # OpenRouter (unified access to 300+ models)
+  openrouter_model: "anthropic/claude-sonnet-4"
+  openrouter_daily_request_limit: 500
+  openrouter_daily_token_limit: 500000
+
+  # Perplexity Web Search
+  perplexity_search_model: "sonar-pro"
+
   # Backend connectors
   matrix_url: "http://100.72.2.99:8000"
   jarvis_hosts:

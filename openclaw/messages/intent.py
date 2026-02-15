@@ -14,6 +14,7 @@ _PATTERNS: list[tuple[re.Pattern, Intent]] = [
     (re.compile(r"\b(work\s*order|wo|maintenance|repair|schedule)\b", re.I), Intent.WORK_ORDER),
     (re.compile(r"\b(health|budget|admin|restart|config)\b", re.I), Intent.ADMIN),
     (re.compile(r"\b(help|what can you|commands|menu)\b", re.I), Intent.HELP),
+    (re.compile(r"\b(search|look\s*up|find\s+(?:out|info)|google|web\s*search)\b", re.I), Intent.SEARCH),
 ]
 
 
@@ -42,6 +43,7 @@ def classify(message: InboundMessage) -> Intent:
             "/health": Intent.ADMIN,
             "/help": Intent.HELP,
             "/start": Intent.HELP,
+            "/search": Intent.SEARCH,
         }
         if cmd in cmd_map:
             return cmd_map[cmd]

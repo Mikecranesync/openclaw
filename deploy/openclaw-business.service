@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenClaw Business Bot
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=openclaw
+Group=openclaw
+WorkingDirectory=/opt/openclaw-business
+ExecStart=/usr/local/bin/doppler run --config business --project openclaw -- /opt/openclaw-business/.venv/bin/python -m openclaw
+Restart=always
+RestartSec=10
+MemoryMax=2G
+CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target
