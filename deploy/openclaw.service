@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenClaw Industrial AI Gateway
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=openclaw
+Group=openclaw
+WorkingDirectory=/opt/openclaw
+ExecStart=/opt/openclaw/.venv/bin/python -m openclaw
+Restart=always
+RestartSec=5
+MemoryMax=2G
+CPUQuota=150%
+
+# API keys via Doppler or env file
+# EnvironmentFile=/opt/openclaw/.env
+
+[Install]
+WantedBy=multi-user.target

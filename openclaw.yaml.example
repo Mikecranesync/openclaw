@@ -1,0 +1,35 @@
+openclaw:
+  host: "0.0.0.0"
+  port: 8340
+  log_level: "INFO"
+
+  # Channels
+  telegram_enabled: true
+  # telegram_allowed_users: [8445149012]  # Empty = allow all
+  telegram_rate_limit_per_hour: 60
+  whatsapp_enabled: false
+  http_api_enabled: true
+  http_api_require_auth: true
+  websocket_enabled: true
+
+  # LLM providers (keys from env vars or Doppler)
+  default_llm_provider: "groq"
+  groq_model: "llama-3.3-70b-versatile"
+  groq_daily_request_limit: 14000
+  nvidia_model: "nvidia/cosmos-reason2-8b"
+  nvidia_fallback_model: "meta/llama-3.1-70b-instruct"
+  anthropic_model: "claude-sonnet-4-20250514"
+  openai_model: "gpt-4o"
+  gemini_model: "gemini-2.5-flash"
+
+  # Backend connectors
+  matrix_url: "http://100.72.2.99:8000"
+  jarvis_hosts:
+    plc_laptop: "http://100.72.2.99:8765"
+    travel_laptop: "http://100.83.251.23:8765"
+  # cmms_url: "http://localhost:8080"
+  # plc_host: "100.72.2.99"
+  # plc_port: 502
+
+  # Security
+  tailscale_only: false
