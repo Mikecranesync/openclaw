@@ -19,17 +19,17 @@ class Route:
     fallbacks: list[str] = field(default_factory=list)
 
 
-# Default routing table
+# Default routing table — Anthropic reserved for high-value intents only
 DEFAULT_ROUTES: dict[Intent, Route] = {
-    Intent.DIAGNOSE: Route("openrouter", ["groq", "nvidia", "openai"]),
-    Intent.STATUS: Route("groq", ["openai"]),
-    Intent.PHOTO: Route("gemini", ["openai", "openrouter"]),
-    Intent.WORK_ORDER: Route("openrouter", ["anthropic", "openai", "groq"]),
-    Intent.CHAT: Route("groq", ["openrouter", "openai"]),
-    Intent.SEARCH: Route("groq", []),
-    Intent.ADMIN: Route("groq", []),
-    Intent.HELP: Route("groq", []),
-    Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
+    Intent.DIAGNOSE:    Route("anthropic", ["groq", "gemini"]),
+    Intent.WORK_ORDER:  Route("anthropic", ["groq"]),
+    Intent.PHOTO:       Route("gemini", ["anthropic"]),
+    Intent.STATUS:      Route("groq", []),
+    Intent.CHAT:        Route("groq", []),
+    Intent.SEARCH:      Route("groq", []),
+    Intent.ADMIN:       Route("groq", []),
+    Intent.HELP:        Route("groq", []),
+    Intent.UNKNOWN:     Route("groq", []),
 }
 
 
@@ -64,7 +64,7 @@ class LLMRouter:
                 return await self._call(provider, messages, system_prompt, images, max_tokens, temperature)
 
         # Get route for this intent
-        route = self.routes.get(intent, Route("groq", ["openai"]))
+        route = self.routes.get(intent, Route("groq", []))
         candidates = [route.primary] + route.fallbacks
 
         attempted = []

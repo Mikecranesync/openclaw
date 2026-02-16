@@ -63,6 +63,12 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
     budget = BudgetTracker()
     if config.groq_daily_request_limit:
         budget.configure("groq", daily_request_limit=config.groq_daily_request_limit)
+    if config.anthropic_daily_request_limit or config.anthropic_daily_token_limit:
+        budget.configure(
+            "anthropic",
+            daily_request_limit=config.anthropic_daily_request_limit,
+            daily_token_limit=config.anthropic_daily_token_limit,
+        )
     if config.openrouter_daily_request_limit or config.openrouter_daily_token_limit:
         budget.configure(
             "openrouter",
@@ -99,7 +105,7 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
 
     # -- Central dispatch --
     async def dispatch(message: InboundMessage) -> OutboundMessage:
-        """Central message dispatch: classify → route → skill → respond."""
+        """Central message dispatch: classify -> route -> skill -> respond."""
         # Classify intent if not already set
         if message.intent == Intent.UNKNOWN:
             message.intent = classify(message)
@@ -140,10 +146,14 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
     async def get_metrics():
         return metrics.summary()
 
+    @app.get("/budget")
+    async def get_budget():
+        return budget.summary()
+
     @app.get("/")
     async def root():
         return {
-            "name": "OpenClaw",
+            "name": "Jarvis (OpenClaw)",
             "version": __version__,
             "providers": list(providers.keys()),
             "skills": [s.name() for s in registry.all_skills()],

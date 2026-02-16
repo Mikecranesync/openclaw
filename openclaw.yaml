@@ -1,0 +1,26 @@
+openclaw:
+  port: 8340
+  log_level: "INFO"
+  telegram_enabled: true
+  telegram_rate_limit_per_hour: 60
+  whatsapp_enabled: false
+  http_api_enabled: true
+
+  # Default provider for general chat/status/admin — cheap and fast
+  default_llm_provider: "groq"
+  groq_model: "llama-3.3-70b-versatile"
+  groq_daily_request_limit: 14000
+
+  # Anthropic — RESERVED for DIAGNOSE and WORK_ORDER intents ONLY
+  anthropic_model: "claude-sonnet-4-20250514"
+  anthropic_daily_request_limit: 100
+  anthropic_daily_token_limit: 100000
+
+  # Gemini — photo analysis
+  gemini_model: "gemini-2.5-flash"
+
+  # Connectors
+  matrix_url: "http://100.72.2.99:8000"
+  jarvis_hosts:
+    plc_laptop: "http://100.72.2.99:8765"
+    travel_laptop: "http://100.83.251.23:8765"

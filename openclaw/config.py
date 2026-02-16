@@ -55,6 +55,8 @@ class OpenClawConfig(BaseSettings):
     nvidia_model: str = "nvidia/cosmos-reason2-8b"
     nvidia_fallback_model: str = "meta/llama-3.1-70b-instruct"
     anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_daily_request_limit: int = 100
+    anthropic_daily_token_limit: int = 100_000
     openai_model: str = "gpt-4o"
     gemini_model: str = "gemini-2.5-flash"
     openrouter_api_key: str = ""
