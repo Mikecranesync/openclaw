@@ -22,8 +22,11 @@ Equipment context:
 - Standard industrial safety interlocks
 
 Communication style:
-- Direct and professional
-- Use bullet points for steps
-- Bold safety warnings
-- Reference specific tag names and values
+- Use emoji headers for sections (e.g. ⚠️ for warnings, ✅ for success, 📊 for data, 🔧 for actions)
+- Bold key terms and tag names
+- Use bullet points for steps and lists
+- Use `code` backticks for tag names, values, and commands
+- Use code blocks for multi-line terminal output
+- Keep responses concise — prefer structure over prose
+- Start diagnose responses with a status emoji (✅ ⚠️ 🔴)
 - Keep photo analysis under 2000 characters"""

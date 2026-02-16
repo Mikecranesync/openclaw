@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import tempfile
 import uuid
 from typing import Callable, Awaitable
 
+import edge_tts
 import httpx
-from telegram import Update
+from telegram import ReactionTypeEmoji, Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 
 from openclaw.gateway.base import ChannelAdapter
@@ -21,6 +23,10 @@ logger = logging.getLogger(__name__)
 TELEGRAM_MAX_LEN = 4096
 WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 WHISPER_MODEL = "whisper-large-v3-turbo"
+
+TTS_VOICE = "en-US-JennyNeural"
+TTS_MAX_CHARS = 4000  # Edge TTS limit per call
+TTS_MIN_CHARS = 20    # Skip voice for very short responses
 
 
 def _chunk_text(text: str, max_len: int = TELEGRAM_MAX_LEN) -> list[str]:
@@ -51,6 +57,23 @@ def _chunk_text(text: str, max_len: int = TELEGRAM_MAX_LEN) -> list[str]:
 
     logger.debug("_chunk_text: %d chars -> %d chunk(s)", sum(len(c) for c in chunks), len(chunks))
     return chunks
+
+
+def _strip_markdown(text: str) -> str:
+    """Strip markdown formatting for TTS — voice should be plain speech."""
+    import re
+    # Remove code blocks
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Remove inline code
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    # Remove bold/italic markers
+    text = text.replace("**", "").replace("__", "")
+    text = text.replace("*", "").replace("_", "")
+    # Remove bullet markers
+    text = re.sub(r"^[-•]\s+", "", text, flags=re.MULTILINE)
+    # Collapse whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 class TelegramAdapter(ChannelAdapter):
@@ -111,6 +134,13 @@ class TelegramAdapter(ChannelAdapter):
             return True
         return user_id in self._allowed_users
 
+    async def _ack(self, update: Update) -> None:
+        """React with 👀 to acknowledge receipt before processing."""
+        try:
+            await update.message.set_reaction([ReactionTypeEmoji(emoji="👀")])
+        except Exception:
+            pass  # Not critical — some chats may not support reactions
+
     async def _reply(self, update: Update, text: str) -> None:
         """Reply with chunking + Markdown fallback on parse errors."""
         for i, chunk in enumerate(_chunk_text(text)):
@@ -127,6 +157,31 @@ class TelegramAdapter(ChannelAdapter):
                     except Exception:
                         pass
                     break
+
+    async def _text_to_speech(self, text: str) -> bytes:
+        """Convert text to OGG voice bytes using Edge TTS."""
+        # Strip markdown — voice should be plain speech
+        plain = _strip_markdown(text)
+        if len(plain) > TTS_MAX_CHARS:
+            plain = plain[:TTS_MAX_CHARS]
+
+        communicate = edge_tts.Communicate(plain, TTS_VOICE)
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp:
+            await communicate.save(tmp.name)
+            tmp.seek(0)
+            return tmp.read()
+
+    async def _reply_voice(self, update: Update, text: str) -> None:
+        """Send a TTS voice note after the text reply. Supplemental — never blocks."""
+        try:
+            plain = _strip_markdown(text)
+            if len(plain) < TTS_MIN_CHARS:
+                return
+            audio_bytes = await self._text_to_speech(text)
+            if audio_bytes:
+                await update.message.reply_voice(voice=audio_bytes)
+        except Exception as e:
+            logger.warning("TTS voice reply failed (non-critical): %s", e)
 
     async def _transcribe_voice(self, audio_bytes: bytes) -> str:
         """Transcribe voice audio using Groq Whisper API."""
@@ -155,6 +210,8 @@ class TelegramAdapter(ChannelAdapter):
         if not user or not self._is_allowed(user.id):
             return
 
+        await self._ack(update)
+
         msg = InboundMessage(
             id=str(uuid.uuid4()),
             channel=Channel.TELEGRAM,
@@ -165,6 +222,7 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            await self._reply_voice(update, response.text)
         except Exception as e:
             logger.error("dispatch failed: %s", e)
             await update.message.reply_text("Sorry, something went wrong. Please try again.")
@@ -175,6 +233,8 @@ class TelegramAdapter(ChannelAdapter):
         user = update.message.from_user
         if not user or not self._is_allowed(user.id):
             return
+
+        await self._ack(update)
 
         photo = update.message.photo[-1]  # Largest size
         try:
@@ -196,6 +256,7 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            await self._reply_voice(update, response.text)
         except Exception as e:
             logger.error("photo dispatch failed: %s", e)
             await update.message.reply_text("Sorry, something went wrong processing that image.")
@@ -206,6 +267,8 @@ class TelegramAdapter(ChannelAdapter):
         user = update.message.from_user
         if not user or not self._is_allowed(user.id):
             return
+
+        await self._ack(update)
 
         voice = update.message.voice
         logger.info("Voice message: %ds, %d bytes", voice.duration, voice.file_size or 0)
@@ -245,6 +308,7 @@ class TelegramAdapter(ChannelAdapter):
             response = await self._dispatch(msg)
             reply_text = f'Heard: "{transcript}"\n\n{response.text}'
             await self._reply(update, reply_text)
+            await self._reply_voice(update, response.text)
         except Exception as e:
             logger.error("voice dispatch failed: %s", e)
             await update.message.reply_text("Sorry, something went wrong processing your voice message.")
@@ -270,6 +334,8 @@ class TelegramAdapter(ChannelAdapter):
         if not user or not self._is_allowed(user.id):
             return
 
+        await self._ack(update)
+
         text = update.message.text or ""
         msg = InboundMessage(
             id=str(uuid.uuid4()),
@@ -281,6 +347,7 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            await self._reply_voice(update, response.text)
         except Exception as e:
             logger.error("command dispatch failed: %s", e)
             await update.message.reply_text("Sorry, something went wrong. Please try again.")
