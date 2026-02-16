@@ -38,6 +38,7 @@ class TelegramAdapter(ChannelAdapter):
         self._app.add_handler(CommandHandler("status", self._on_command))
         self._app.add_handler(CommandHandler("diagnose", self._on_command))
         self._app.add_handler(CommandHandler("health", self._on_command))
+        self._app.add_handler(CommandHandler("search", self._on_command))
 
         await self._app.initialize()
         await self._app.start()
@@ -66,6 +67,13 @@ class TelegramAdapter(ChannelAdapter):
             return True
         return user_id in self._allowed_users
 
+    async def _reply(self, update: Update, text: str) -> None:
+        """Reply with Markdown, falling back to plain text on parse errors."""
+        try:
+            await update.message.reply_text(text, parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text(text)
+
     async def _on_message(self, update: Update, context) -> None:
         if not update.message or not update.message.text:
             return
@@ -80,8 +88,12 @@ class TelegramAdapter(ChannelAdapter):
             user_name=user.first_name or "",
             text=update.message.text,
         )
-        response = await self._dispatch(msg)
-        await update.message.reply_text(response.text, parse_mode="Markdown")
+        try:
+            response = await self._dispatch(msg)
+            await self._reply(update, response.text)
+        except Exception as e:
+            logger.error("dispatch failed: %s", e)
+            await update.message.reply_text("Sorry, something went wrong. Please try again.")
 
     async def _on_photo(self, update: Update, context) -> None:
         if not update.message or not update.message.photo:
@@ -102,8 +114,12 @@ class TelegramAdapter(ChannelAdapter):
             text=update.message.caption or "",
             attachments=[Attachment(type="image", data=bytes(data), mime_type="image/jpeg")],
         )
-        response = await self._dispatch(msg)
-        await update.message.reply_text(response.text, parse_mode="Markdown")
+        try:
+            response = await self._dispatch(msg)
+            await self._reply(update, response.text)
+        except Exception as e:
+            logger.error("photo dispatch failed: %s", e)
+            await update.message.reply_text("Sorry, something went wrong processing that image.")
 
     async def _on_start(self, update: Update, context) -> None:
         if update.message:
@@ -134,5 +150,9 @@ class TelegramAdapter(ChannelAdapter):
             user_name=user.first_name or "",
             text=text,
         )
-        response = await self._dispatch(msg)
-        await update.message.reply_text(response.text, parse_mode="Markdown")
+        try:
+            response = await self._dispatch(msg)
+            await self._reply(update, response.text)
+        except Exception as e:
+            logger.error("command dispatch failed: %s", e)
+            await update.message.reply_text("Sorry, something went wrong. Please try again.")
