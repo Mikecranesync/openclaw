@@ -46,5 +46,12 @@ def test_search_intent():
     assert classify(_msg("look up Allen-Bradley pricing")) == Intent.SEARCH
 
 
+def test_help_not_triggered_by_conversation():
+    # "help" in conversational context should route to CHAT, not HELP
+    assert classify(_msg("can you help me with this?")) == Intent.CHAT
+    assert classify(_msg("I need help wiring the panel")) == Intent.CHAT
+    assert classify(_msg("help me troubleshoot")) == Intent.CHAT
+
+
 def test_chat_fallback():
     assert classify(_msg("hello how are you")) == Intent.CHAT
