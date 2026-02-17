@@ -65,6 +65,17 @@ class TelegramAdapter(ChannelAdapter):
 
     async def send(self, message: OutboundMessage) -> None:
         if self._app:
+            # Send image attachments first
+            for att in message.attachments:
+                if att.type == "image" and att.data:
+                    try:
+                        await self._app.bot.send_photo(
+                            chat_id=int(message.user_id),
+                            photo=att.data,
+                            caption=att.filename or "",
+                        )
+                    except Exception:
+                        logger.exception("Failed to send photo via send()")
             await self._app.bot.send_message(
                 chat_id=int(message.user_id),
                 text=message.text,
@@ -135,6 +146,27 @@ class TelegramAdapter(ChannelAdapter):
                 logger.exception("Failed to send even as plain text")
                 await update.message.reply_text("Response generated but could not be sent. Please try again.")
 
+
+    async def _send_attachments(self, update: Update, attachments: list) -> None:
+        """Send image/document attachments from OutboundMessage."""
+        for att in attachments:
+            if att.type == "image" and att.data:
+                try:
+                    await update.message.reply_photo(
+                        photo=att.data,
+                        caption=att.filename or "diagram.png",
+                    )
+                except Exception:
+                    logger.exception("Failed to send photo attachment")
+            elif att.type == "document" and att.data:
+                try:
+                    await update.message.reply_document(
+                        document=att.data,
+                        filename=att.filename or "file",
+                    )
+                except Exception:
+                    logger.exception("Failed to send document attachment")
+
     async def _on_message(self, update: Update, context) -> None:
         if not update.message or not update.message.text:
             return
@@ -165,6 +197,9 @@ class TelegramAdapter(ChannelAdapter):
 
         try:
             response = await self._dispatch(msg)
+            # Send image attachments first (e.g., diagrams)
+            if response.attachments:
+                await self._send_attachments(update, response.attachments)
             await self._reply(update, response.text)
             # Store assistant response in history
             self._add_to_history(user_id, "assistant", response.text[:500])
@@ -249,6 +284,9 @@ class TelegramAdapter(ChannelAdapter):
 
         try:
             response = await self._dispatch(msg)
+            # Send image attachments first (e.g., diagrams)
+            if response.attachments:
+                await self._send_attachments(update, response.attachments)
             await self._reply(update, response.text)
             # Store assistant response in history
             self._add_to_history(user_id, "assistant", response.text[:500])
