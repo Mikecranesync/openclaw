@@ -30,6 +30,8 @@ DEFAULT_ROUTES: dict[Intent, Route] = {
     Intent.ADMIN: Route("groq", []),
     Intent.HELP: Route("groq", []),
     Intent.DIAGRAM: Route("openrouter", ["anthropic", "groq"]),
+    Intent.GIST: Route("openrouter", ["anthropic", "groq"]),
+    Intent.PROJECT: Route("openrouter", ["anthropic", "groq"]),
     Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
 }
 
@@ -56,13 +58,14 @@ class LLMRouter:
         prefer: str | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.3,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Select provider and execute request with automatic fallback."""
         # If explicit provider requested
         if prefer and prefer in self.providers:
             provider = self.providers[prefer]
             if provider.is_available() and self.budget.is_within_budget(prefer):
-                return await self._call(provider, messages, system_prompt, images, max_tokens, temperature)
+                return await self._call(provider, messages, system_prompt, images, max_tokens, temperature, json_mode)
 
         # Get route for this intent
         route = self.routes.get(intent, Route("groq", ["openai"]))
@@ -81,7 +84,7 @@ class LLMRouter:
 
             attempted.append(provider_name)
             try:
-                response = await self._call(provider, messages, system_prompt, images, max_tokens, temperature)
+                response = await self._call(provider, messages, system_prompt, images, max_tokens, temperature, json_mode)
                 self.budget.record(provider_name, response.tokens_used)
                 return response
             except Exception:
@@ -101,6 +104,7 @@ class LLMRouter:
         images: list[bytes] | None,
         max_tokens: int,
         temperature: float,
+        json_mode: bool = False,
     ) -> LLMResponse:
         start = time.monotonic()
         if images:
@@ -109,7 +113,8 @@ class LLMRouter:
             )
         else:
             response = await provider.complete(
-                messages, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature
+                messages, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature,
+                json_mode=json_mode,
             )
         response.latency_ms = int((time.monotonic() - start) * 1000)
         logger.info(
