@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
+from collections import defaultdict
 from typing import Callable, Awaitable
 
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import Application, MessageHandler, CommandHandler, filters
 
 from openclaw.gateway.base import ChannelAdapter
@@ -15,6 +18,10 @@ from openclaw.messages.models import Attachment, InboundMessage, OutboundMessage
 from openclaw.types import Channel
 
 logger = logging.getLogger(__name__)
+
+# Per-user conversation history settings
+_MAX_HISTORY = 10  # Max messages per user (5 exchanges)
+_HISTORY_TTL = 1800  # 30 minutes — clear stale history
 
 
 class TelegramAdapter(ChannelAdapter):
@@ -28,18 +35,22 @@ class TelegramAdapter(ChannelAdapter):
         self._dispatch = dispatch
         self._allowed_users = set(allowed_users) if allowed_users else None
         self._app: Application | None = None
+        # Per-user conversation history: {user_id: [{"role": ..., "content": ..., "ts": ...}]}
+        self._history: dict[str, list[dict]] = defaultdict(list)
 
     async def start(self) -> None:
         self._app = Application.builder().token(self._token).build()
         self._app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message))
         self._app.add_handler(MessageHandler(filters.PHOTO, self._on_photo))
+        # Explicit command handlers
         self._app.add_handler(CommandHandler("start", self._on_start))
         self._app.add_handler(CommandHandler("help", self._on_help))
-        self._app.add_handler(CommandHandler("status", self._on_command))
-        self._app.add_handler(CommandHandler("diagnose", self._on_command))
-        self._app.add_handler(CommandHandler("health", self._on_command))
-        self._app.add_handler(CommandHandler("search", self._on_command))
-        self._app.add_handler(CommandHandler("run", self._on_command))
+        self._app.add_handler(CommandHandler("clear", self._on_clear))
+        # Route all known commands through generic handler
+        for cmd in ("status", "diagnose", "health", "search", "run",
+                     "diagram", "wiring", "gist", "project", "wo", "workorder",
+                     "admin", "photo"):
+            self._app.add_handler(CommandHandler(cmd, self._on_command))
 
         await self._app.initialize()
         await self._app.start()
@@ -67,6 +78,25 @@ class TelegramAdapter(ChannelAdapter):
         if not self._allowed_users:
             return True
         return user_id in self._allowed_users
+
+    def _get_history(self, user_id: str) -> list[dict]:
+        """Get conversation history for a user, pruning stale entries."""
+        history = self._history[user_id]
+        now = time.time()
+        # Remove entries older than TTL
+        history[:] = [h for h in history if now - h.get("ts", 0) < _HISTORY_TTL]
+        return [{"role": h["role"], "content": h["content"]} for h in history]
+
+    def _add_to_history(self, user_id: str, role: str, content: str) -> None:
+        """Add a message to conversation history, capping at max."""
+        self._history[user_id].append({
+            "role": role,
+            "content": content,
+            "ts": time.time(),
+        })
+        # Cap history length
+        if len(self._history[user_id]) > _MAX_HISTORY:
+            self._history[user_id] = self._history[user_id][-_MAX_HISTORY:]
 
     async def _send_long(self, update: Update, text: str, parse_mode: str | None = None) -> None:
         """Send message, chunking if over Telegram's 4096 char limit."""
@@ -112,16 +142,32 @@ class TelegramAdapter(ChannelAdapter):
         if not user or not self._is_allowed(user.id):
             return
 
+        user_id = str(user.id)
+        user_text = update.message.text
+
+        # Show typing indicator
+        await update.message.chat.send_action(ChatAction.TYPING)
+
+        # Get conversation history and inject into metadata
+        history = self._get_history(user_id)
+
         msg = InboundMessage(
             id=str(uuid.uuid4()),
             channel=Channel.TELEGRAM,
-            user_id=str(user.id),
+            user_id=user_id,
             user_name=user.first_name or "",
-            text=update.message.text,
+            text=user_text,
+            metadata={"history": history} if history else {},
         )
+
+        # Store user message in history
+        self._add_to_history(user_id, "user", user_text)
+
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            # Store assistant response in history
+            self._add_to_history(user_id, "assistant", response.text[:500])
         except Exception:
             logger.exception("dispatch failed for message from user %s", user.id)
             await update.message.reply_text("Error processing request. Logged for review.")
@@ -132,6 +178,9 @@ class TelegramAdapter(ChannelAdapter):
         user = update.message.from_user
         if not user or not self._is_allowed(user.id):
             return
+
+        # Show typing indicator
+        await update.message.chat.send_action(ChatAction.TYPING)
 
         photo = update.message.photo[-1]  # Largest size
         file = await context.bot.get_file(photo.file_id)
@@ -161,6 +210,15 @@ class TelegramAdapter(ChannelAdapter):
     async def _on_help(self, update: Update, context) -> None:
         await self._on_start(update, context)
 
+    async def _on_clear(self, update: Update, context) -> None:
+        """Clear conversation history for this user."""
+        if not update.message:
+            return
+        user = update.message.from_user
+        if user:
+            self._history[str(user.id)] = []
+            await update.message.reply_text("Conversation history cleared.")
+
     async def _on_command(self, update: Update, context) -> None:
         if not update.message:
             return
@@ -168,17 +226,32 @@ class TelegramAdapter(ChannelAdapter):
         if not user or not self._is_allowed(user.id):
             return
 
+        user_id = str(user.id)
         text = update.message.text or ""
+
+        # Show typing indicator
+        await update.message.chat.send_action(ChatAction.TYPING)
+
+        # Get conversation history
+        history = self._get_history(user_id)
+
         msg = InboundMessage(
             id=str(uuid.uuid4()),
             channel=Channel.TELEGRAM,
-            user_id=str(user.id),
+            user_id=user_id,
             user_name=user.first_name or "",
             text=text,
+            metadata={"history": history} if history else {},
         )
+
+        # Store user message in history
+        self._add_to_history(user_id, "user", text)
+
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            # Store assistant response in history
+            self._add_to_history(user_id, "assistant", response.text[:500])
         except Exception:
             logger.exception("command dispatch failed for user %s", user.id)
             await update.message.reply_text("Error processing request. Logged for review.")
