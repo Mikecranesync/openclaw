@@ -76,6 +76,14 @@ class OpenClawConfig(BaseSettings):
     # Security
     tailscale_only: bool = False
 
+    # Knowledge Base (rivet PostgreSQL)
+    kb_enabled: bool = False
+    kb_postgres_url: str = ""
+
+    # Maintenance LLM (Ollama on PLC laptop)
+    maint_llm_enabled: bool = False
+    maint_llm_url: str = "http://100.72.2.99:11434"
+
     @classmethod
     def from_yaml(cls, path: str | Path = "openclaw.yaml") -> OpenClawConfig:
         """Load config from YAML file, with env vars taking precedence."""
