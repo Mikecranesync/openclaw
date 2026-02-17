@@ -61,6 +61,9 @@ class ChatSkill(Skill):
                     lines.append(f"  Fixes: {'; '.join(fixes[:3])}")
                 if steps:
                     lines.append(f"  Steps: {'; '.join(steps[:3])}")
+                source = atom.get("source_url", "")
+                if source:
+                    lines.append(f"  Source: {source}")
                 lines.append("")
 
             return "\n".join(lines)

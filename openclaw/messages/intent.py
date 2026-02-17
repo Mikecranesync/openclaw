@@ -9,6 +9,7 @@ from openclaw.types import Intent
 
 # Keyword patterns for rule-based classification
 _PATTERNS: list[tuple[re.Pattern, Intent]] = [
+    (re.compile(r"\b(wiring|diagram|schematic|blueprint|draw(?:ing)?|circuit)\b", re.I), Intent.DIAGRAM),
     (re.compile(r"\b(why|stopped|fault|error|alarm|broken|down|diagnos)", re.I), Intent.DIAGNOSE),
     (re.compile(r"\b(status|tags?|reading|current|temp|pressure|running)\b", re.I), Intent.STATUS),
     (re.compile(r"\b(work\s*order|wo|maintenance|repair|schedule)\b", re.I), Intent.WORK_ORDER),
@@ -35,6 +36,8 @@ def classify(message: InboundMessage) -> Intent:
     if text.startswith("/"):
         cmd = text.split()[0].lower()
         cmd_map = {
+            "/diagram": Intent.DIAGRAM,
+            "/wiring": Intent.DIAGRAM,
             "/diagnose": Intent.DIAGNOSE,
             "/status": Intent.STATUS,
             "/photo": Intent.PHOTO,

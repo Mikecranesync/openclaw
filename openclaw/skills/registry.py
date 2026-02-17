@@ -31,6 +31,7 @@ class SkillRegistry:
         """Register all built-in skills."""
         from openclaw.skills.builtin.admin import AdminSkill
         from openclaw.skills.builtin.chat import ChatSkill
+        from openclaw.skills.builtin.diagram import DiagramSkill
         from openclaw.skills.builtin.diagnose import DiagnoseSkill
         from openclaw.skills.builtin.photo import PhotoSkill
         from openclaw.skills.builtin.search import SearchSkill
@@ -38,5 +39,5 @@ class SkillRegistry:
         from openclaw.skills.builtin.status import StatusSkill
         from openclaw.skills.builtin.work_order import WorkOrderSkill
 
-        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, ChatSkill]:
+        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, DiagramSkill, ChatSkill]:
             self.register(skill_cls())
