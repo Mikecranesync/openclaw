@@ -33,11 +33,13 @@ class SkillRegistry:
         from openclaw.skills.builtin.chat import ChatSkill
         from openclaw.skills.builtin.diagram import DiagramSkill
         from openclaw.skills.builtin.diagnose import DiagnoseSkill
+        from openclaw.skills.builtin.gist import GistSkill
         from openclaw.skills.builtin.photo import PhotoSkill
+        from openclaw.skills.builtin.project import ProjectSkill
         from openclaw.skills.builtin.search import SearchSkill
         from openclaw.skills.builtin.shell import ShellSkill
         from openclaw.skills.builtin.status import StatusSkill
         from openclaw.skills.builtin.work_order import WorkOrderSkill
 
-        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, DiagramSkill, ChatSkill]:
+        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, DiagramSkill, ChatSkill, GistSkill, ProjectSkill]:
             self.register(skill_cls())

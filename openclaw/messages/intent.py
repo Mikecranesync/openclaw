@@ -10,6 +10,8 @@ from openclaw.types import Intent
 # Keyword patterns for rule-based classification
 _PATTERNS: list[tuple[re.Pattern, Intent]] = [
     (re.compile(r"\b(wiring|diagram|schematic|blueprint|draw(?:ing)?|circuit)\b", re.I), Intent.DIAGRAM),
+    (re.compile(r"\b(scaffold|build\s+me\b|create\s+a\s+project|start\s+a\s+new|bootstrap|starter\s*kit|boilerplate)\b", re.I), Intent.PROJECT),
+    (re.compile(r"\b(gist|write\s*up|draft\s+a\b|prd\s+for|technical\s+spec|build\s+guide|strategy\s+doc|save\s+.+as\s+gist)\b", re.I), Intent.GIST),
     (re.compile(r"\b(why|stopped|fault|error|alarm|broken|down|diagnos)", re.I), Intent.DIAGNOSE),
     (re.compile(r"\b(status|tags?|reading|current|temp|pressure|running)\b", re.I), Intent.STATUS),
     (re.compile(r"\b(work\s*order|wo|maintenance|repair|schedule)\b", re.I), Intent.WORK_ORDER),
@@ -49,6 +51,8 @@ def classify(message: InboundMessage) -> Intent:
             "/start": Intent.HELP,
             "/search": Intent.SEARCH,
             "/run": Intent.SHELL,
+            "/gist": Intent.GIST,
+            "/project": Intent.PROJECT,
         }
         if cmd in cmd_map:
             return cmd_map[cmd]
