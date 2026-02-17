@@ -29,6 +29,7 @@ DEFAULT_ROUTES: dict[Intent, Route] = {
     Intent.SEARCH: Route("groq", []),
     Intent.ADMIN: Route("groq", []),
     Intent.HELP: Route("groq", []),
+    Intent.DIAGRAM: Route("openrouter", ["anthropic", "groq"]),
     Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
 }
 
