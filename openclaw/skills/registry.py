@@ -40,6 +40,7 @@ class SkillRegistry:
         from openclaw.skills.builtin.shell import ShellSkill
         from openclaw.skills.builtin.status import StatusSkill
         from openclaw.skills.builtin.work_order import WorkOrderSkill
+        from openclaw.skills.builtin.wiring_enrich import WiringEnrichSkill
 
-        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, DiagramSkill, ChatSkill, GistSkill, ProjectSkill]:
+        for skill_cls in [DiagnoseSkill, StatusSkill, PhotoSkill, WorkOrderSkill, AdminSkill, SearchSkill, ShellSkill, DiagramSkill, ChatSkill, GistSkill, ProjectSkill, WiringEnrichSkill]:
             self.register(skill_cls())

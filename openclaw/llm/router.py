@@ -21,18 +21,18 @@ class Route:
 
 # Default routing table
 DEFAULT_ROUTES: dict[Intent, Route] = {
-    Intent.DIAGNOSE: Route("openrouter", ["groq", "nvidia", "openai"]),
+    Intent.DIAGNOSE: Route("openrouter", ["groq", "deepseek", "nvidia", "openai"]),
     Intent.STATUS: Route("groq", ["openai"]),
     Intent.PHOTO: Route("gemini", ["openai", "openrouter"]),
-    Intent.WORK_ORDER: Route("openrouter", ["anthropic", "openai", "groq"]),
-    Intent.CHAT: Route("groq", ["openrouter", "openai"]),
+    Intent.WORK_ORDER: Route("openrouter", ["groq", "deepseek", "anthropic", "openai"]),
+    Intent.CHAT: Route("groq", ["deepseek", "openrouter", "openai"]),
     Intent.SEARCH: Route("groq", []),
     Intent.ADMIN: Route("groq", []),
     Intent.HELP: Route("groq", []),
-    Intent.DIAGRAM: Route("openrouter", ["anthropic", "groq"]),
-    Intent.GIST: Route("openrouter", ["anthropic", "groq"]),
-    Intent.PROJECT: Route("openrouter", ["anthropic", "groq"]),
-    Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
+    Intent.DIAGRAM: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.GIST: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.PROJECT: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.UNKNOWN: Route("groq", ["deepseek", "openrouter", "openai"]),
 }
 
 

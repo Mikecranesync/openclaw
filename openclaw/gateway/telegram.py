@@ -17,6 +17,9 @@ from openclaw.gateway.base import ChannelAdapter
 from openclaw.messages.models import Attachment, InboundMessage, OutboundMessage
 from openclaw.types import Channel
 
+# TTS for voice messages
+from openclaw.tts import synthesize as tts_synthesize
+
 logger = logging.getLogger(__name__)
 
 # Per-user conversation history settings
@@ -30,11 +33,14 @@ class TelegramAdapter(ChannelAdapter):
         token: str,
         dispatch: Callable[[InboundMessage], Awaitable[OutboundMessage]],
         allowed_users: list[int] | None = None,
+        openai_api_key: str = "",
     ) -> None:
         self._token = token
         self._dispatch = dispatch
         self._allowed_users = set(allowed_users) if allowed_users else None
         self._app: Application | None = None
+        self._openai_api_key = openai_api_key
+        self._voice_enabled = True  # Can be toggled per-user later
         # Per-user conversation history: {user_id: [{"role": ..., "content": ..., "ts": ...}]}
         self._history: dict[str, list[dict]] = defaultdict(list)
 
@@ -167,6 +173,23 @@ class TelegramAdapter(ChannelAdapter):
                 except Exception:
                     logger.exception("Failed to send document attachment")
 
+    async def _send_voice(self, update: Update, text: str) -> None:
+        """Convert text to OGG Opus and send as Telegram voice message."""
+        try:
+            await update.message.chat.send_action(ChatAction.RECORD_VOICE)
+            audio_bytes = await tts_synthesize(text, self._openai_api_key)
+            if audio_bytes:
+                import io
+                await update.message.reply_voice(
+                    voice=io.BytesIO(audio_bytes),
+                    caption=None,
+                )
+                logger.info("Voice message sent: %d bytes", len(audio_bytes))
+            else:
+                logger.warning("TTS synthesis returned None — text-only response")
+        except Exception:
+            logger.exception("Failed to send voice message — text already sent")
+
     async def _on_message(self, update: Update, context) -> None:
         if not update.message or not update.message.text:
             return
@@ -201,6 +224,9 @@ class TelegramAdapter(ChannelAdapter):
             if response.attachments:
                 await self._send_attachments(update, response.attachments)
             await self._reply(update, response.text)
+            # Send voice message (non-blocking — text already sent)
+            if self._voice_enabled and not response.attachments:
+                await self._send_voice(update, response.text)
             # Store assistant response in history
             self._add_to_history(user_id, "assistant", response.text[:500])
         except Exception:
