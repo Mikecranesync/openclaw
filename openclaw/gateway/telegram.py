@@ -39,6 +39,7 @@ class TelegramAdapter(ChannelAdapter):
         self._app.add_handler(CommandHandler("diagnose", self._on_command))
         self._app.add_handler(CommandHandler("health", self._on_command))
         self._app.add_handler(CommandHandler("search", self._on_command))
+        self._app.add_handler(CommandHandler("run", self._on_command))
 
         await self._app.initialize()
         await self._app.start()
@@ -67,12 +68,42 @@ class TelegramAdapter(ChannelAdapter):
             return True
         return user_id in self._allowed_users
 
+    async def _send_long(self, update: Update, text: str, parse_mode: str | None = None) -> None:
+        """Send message, chunking if over Telegram's 4096 char limit."""
+        MAX = 4096
+        if len(text) <= MAX:
+            await update.message.reply_text(text, parse_mode=parse_mode)
+            return
+        logger.debug("Chunking message: %d chars", len(text))
+        chunks: list[str] = []
+        while text:
+            if len(text) <= MAX:
+                chunks.append(text)
+                break
+            cut = text.rfind("\n\n", 0, MAX)
+            if cut == -1:
+                cut = text.rfind("\n", 0, MAX)
+            if cut == -1:
+                cut = MAX
+            chunks.append(text[:cut])
+            text = text[cut:].lstrip("\n")
+        logger.debug("Chunking message: %d chunks", len(chunks))
+        for chunk in chunks:
+            try:
+                await update.message.reply_text(chunk, parse_mode=parse_mode)
+            except Exception:
+                await update.message.reply_text(chunk)
+
     async def _reply(self, update: Update, text: str) -> None:
         """Reply with Markdown, falling back to plain text on parse errors."""
         try:
-            await update.message.reply_text(text, parse_mode="Markdown")
+            await self._send_long(update, text, parse_mode="Markdown")
         except Exception:
-            await update.message.reply_text(text)
+            try:
+                await self._send_long(update, text)
+            except Exception:
+                logger.exception("Failed to send even as plain text")
+                await update.message.reply_text("Response generated but could not be sent. Please try again.")
 
     async def _on_message(self, update: Update, context) -> None:
         if not update.message or not update.message.text:
@@ -91,9 +122,9 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
-        except Exception as e:
-            logger.error("dispatch failed: %s", e)
-            await update.message.reply_text("Sorry, something went wrong. Please try again.")
+        except Exception:
+            logger.exception("dispatch failed for message from user %s", user.id)
+            await update.message.reply_text("Error processing request. Logged for review.")
 
     async def _on_photo(self, update: Update, context) -> None:
         if not update.message or not update.message.photo:
@@ -117,19 +148,14 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
-        except Exception as e:
-            logger.error("photo dispatch failed: %s", e)
-            await update.message.reply_text("Sorry, something went wrong processing that image.")
+        except Exception:
+            logger.exception("photo dispatch failed for user %s", user.id)
+            await update.message.reply_text("Error processing request. Logged for review.")
 
     async def _on_start(self, update: Update, context) -> None:
         if update.message:
             await update.message.reply_text(
-                "Welcome to OpenClaw! I'm your factory AI assistant.\n\n"
-                "Send me a message like:\n"
-                "- \"Why is conveyor 1 stopped?\"\n"
-                "- \"Show me current status\"\n"
-                "- Send a photo for equipment analysis\n"
-                "- /health for system status"
+                "Jarvis online. What do you need, Mike?"
             )
 
     async def _on_help(self, update: Update, context) -> None:
@@ -153,6 +179,6 @@ class TelegramAdapter(ChannelAdapter):
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
-        except Exception as e:
-            logger.error("command dispatch failed: %s", e)
-            await update.message.reply_text("Sorry, something went wrong. Please try again.")
+        except Exception:
+            logger.exception("command dispatch failed for user %s", user.id)
+            await update.message.reply_text("Error processing request. Logged for review.")

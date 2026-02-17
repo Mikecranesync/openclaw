@@ -83,6 +83,12 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
         connectors["cmms"] = CMMSConnector(config.cmms_url, config.cmms_email, config.cmms_password)
     if config.plc_host:
         connectors["plc"] = PLCConnector(config.plc_host, config.plc_port)
+    if config.kb_enabled and config.kb_postgres_url:
+        from openclaw.connectors.knowledge import KnowledgeConnector
+        connectors["knowledge"] = KnowledgeConnector(config.kb_postgres_url)
+    if config.maint_llm_enabled and config.maint_llm_url:
+        from openclaw.connectors.maintenance_llm import MaintenanceLLMConnector
+        connectors["maintenance_llm"] = MaintenanceLLMConnector(config.maint_llm_url)
 
     # -- Skills --
     registry = SkillRegistry()

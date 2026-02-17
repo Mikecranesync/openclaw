@@ -19,4 +19,5 @@ class Intent(str, Enum):
     ADMIN = "admin"
     HELP = "help"
     SEARCH = "search"
+    SHELL = "shell"
     UNKNOWN = "unknown"
