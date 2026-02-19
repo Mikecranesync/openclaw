@@ -23,4 +23,6 @@ class Intent(str, Enum):
     DIAGRAM = "diagram"
     GIST = "gist"
     PROJECT = "project"
+    WIRING_RECONSTRUCT = "wiring_reconstruct"
+    KB_ENRICH = "kb_enrich"
     UNKNOWN = "unknown"

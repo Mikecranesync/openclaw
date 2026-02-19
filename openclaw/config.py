@@ -57,7 +57,10 @@ class OpenClawConfig(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-20250514"
     openai_model: str = "gpt-4o"
     gemini_model: str = "gemini-2.5-flash"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
     openrouter_api_key: str = ""
+
     openrouter_model: str = "anthropic/claude-sonnet-4"
     openrouter_daily_request_limit: int = 500
     openrouter_daily_token_limit: int = 500_000

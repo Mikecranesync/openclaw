@@ -10,8 +10,12 @@ from openclaw.types import Intent
 # Keyword patterns for rule-based classification
 # Order matters: first match wins. More specific patterns go first.
 _PATTERNS: list[tuple[re.Pattern, Intent]] = [
+    # WORK_ORDER — highest priority when explicitly requested
+    (re.compile(r"\b(work\s*order|open\s+a?\s*wo\b|create\s+a?\s*wo\b)", re.I), Intent.WORK_ORDER),
+
     # DIAGRAM — specific equipment terms
-    (re.compile(r"\b(wiring|diagram|schematic|blueprint|draw(?:ing)?|circuit)\b", re.I), Intent.DIAGRAM),
+    (re.compile(r"\b(wiring|diagram|schematic|blueprint|draw(?:ing)?|circuit|print(?:s)?|redraw|re-draw)\b", re.I), Intent.DIAGRAM),
+    (re.compile(r"\b(update|redo|fix|change|modify|add\s+\w+\s+to)\b.{0,30}\b(print|diagram|drawing|schematic)\b", re.I), Intent.DIAGRAM),
 
     # PROJECT — scaffold/build requests
     (re.compile(r"\b(scaffold|build\s+me\b|create\s+a\s+project|start\s+a\s+new|bootstrap|starter\s*kit|boilerplate)\b", re.I), Intent.PROJECT),
@@ -28,7 +32,7 @@ _PATTERNS: list[tuple[re.Pattern, Intent]] = [
     (re.compile(r"\b(stopped|down|error)\b.{0,30}\b(motor|conveyor|equipment|machine|line|plc|vfd|pump|compressor)\b", re.I), Intent.DIAGNOSE),
 
     # STATUS — removed "current" (too ambiguous in general English)
-    (re.compile(r"\b(status|tags?|reading|temp|pressure|running)\b", re.I), Intent.STATUS),
+    (re.compile(r"\b(status|tags?|reading|temp|pressure|running|show\s+(?:me\s+)?io|live\s+io|plc\s+io|\bio\b)\b", re.I), Intent.STATUS),
 
     # WORK_ORDER — removed "repair" (ambiguous: "how to repair?" is a KB question)
     (re.compile(r"\b(work\s*order|wo\b|maintenance|schedule)\b", re.I), Intent.WORK_ORDER),

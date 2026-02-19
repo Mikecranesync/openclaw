@@ -2,7 +2,7 @@
 
 Replaces ASCII art with professional IEC 60617 diagrams rendered via
 the openclaw.diagram engine. The LLM generates a structured JSON spec;
-the WiringRenderer turns it into SVG → PNG.
+the WiringRenderer turns it into SVG -> PNG.
 """
 
 from __future__ import annotations
@@ -108,10 +108,11 @@ class DiagramSkill(Skill):
         prompt = self._build_spec_prompt(query, kb_context)
 
         # 3. Call LLM with json_mode for structured output
+        messages = [{"role": "user", "content": prompt}]
         try:
             response = await context.llm.route(
                 Intent.DIAGRAM,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
                 system_prompt=SYSTEM_PROMPT,
                 json_mode=True,
                 max_tokens=2048,
@@ -125,17 +126,42 @@ class DiagramSkill(Skill):
                 text="Failed to generate diagram spec. Please try again.",
             )
 
-        # 4. Parse JSON response into DiagramSpec
+        # 4. Parse JSON response into DiagramSpec (with one retry on parse failure)
         try:
             spec_json = json.loads(response.text)
+        except json.JSONDecodeError as e:
+            logger.warning("JSON parse failed on first attempt: %s — retrying", e)
+            # Retry once: ask LLM to fix its JSON
+            retry_messages = messages + [
+                {"role": "assistant", "content": response.text},
+                {"role": "user", "content": f"Your JSON was invalid: {e}. Return ONLY valid JSON, no markdown."},
+            ]
+            try:
+                response = await context.llm.route(
+                    Intent.DIAGRAM,
+                    messages=retry_messages,
+                    system_prompt=SYSTEM_PROMPT,
+                    json_mode=True,
+                    max_tokens=2048,
+                    temperature=0.1,
+                )
+                spec_json = json.loads(response.text)
+            except (json.JSONDecodeError, Exception) as retry_err:
+                logger.error("JSON retry also failed: %s\nRaw: %s", retry_err, response.text[:500])
+                return OutboundMessage(
+                    channel=message.channel,
+                    user_id=message.user_id,
+                    text=f"Diagram spec generation produced invalid JSON after retry. Raw output:\n\n```\n{response.text[:2000]}\n```",
+                )
+
+        try:
             spec = DiagramSpec.model_validate(spec_json)
-        except (json.JSONDecodeError, Exception) as e:
-            logger.error("Failed to parse diagram spec JSON: %s\nRaw: %s", e, response.text[:500])
-            # Fall back to showing the raw LLM response
+        except Exception as e:
+            logger.error("DiagramSpec validation failed: %s", e)
             return OutboundMessage(
                 channel=message.channel,
                 user_id=message.user_id,
-                text=f"Diagram spec generation produced invalid JSON. Raw output:\n\n```\n{response.text[:2000]}\n```",
+                text=f"Diagram spec validation failed: {e}",
             )
 
         # 5. Render to PNG

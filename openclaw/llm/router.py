@@ -19,20 +19,34 @@ class Route:
     fallbacks: list[str] = field(default_factory=list)
 
 
+@dataclass
+class ProviderHealth:
+    """Track consecutive failures for circuit breaker logic."""
+
+    consecutive_failures: int = 0
+    last_failure: float = 0.0
+    circuit_open_until: float = 0.0
+
+
+# Circuit breaker settings
+CIRCUIT_BREAKER_THRESHOLD = 3  # failures before opening circuit
+CIRCUIT_BREAKER_COOLDOWN = 300  # 5 minutes before retrying
+
+
 # Default routing table
 DEFAULT_ROUTES: dict[Intent, Route] = {
-    Intent.DIAGNOSE: Route("openrouter", ["groq", "nvidia", "openai"]),
+    Intent.DIAGNOSE: Route("openrouter", ["groq", "deepseek", "nvidia", "openai"]),
     Intent.STATUS: Route("groq", ["openai"]),
-    Intent.PHOTO: Route("gemini", ["openai", "openrouter"]),
-    Intent.WORK_ORDER: Route("openrouter", ["anthropic", "openai", "groq"]),
-    Intent.CHAT: Route("groq", ["openrouter", "openai"]),
+    Intent.PHOTO: Route("openrouter", ["gemini", "openai"]),
+    Intent.WORK_ORDER: Route("openrouter", ["groq", "deepseek", "anthropic", "openai"]),
+    Intent.CHAT: Route("groq", ["deepseek", "openrouter", "openai"]),
     Intent.SEARCH: Route("groq", []),
     Intent.ADMIN: Route("groq", []),
     Intent.HELP: Route("groq", []),
-    Intent.DIAGRAM: Route("openrouter", ["anthropic", "groq"]),
-    Intent.GIST: Route("openrouter", ["anthropic", "groq"]),
-    Intent.PROJECT: Route("openrouter", ["anthropic", "groq"]),
-    Intent.UNKNOWN: Route("groq", ["openrouter", "openai"]),
+    Intent.DIAGRAM: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.GIST: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.PROJECT: Route("openrouter", ["groq", "deepseek", "anthropic"]),
+    Intent.UNKNOWN: Route("groq", ["deepseek", "openrouter", "openai"]),
 }
 
 
@@ -48,6 +62,7 @@ class LLMRouter:
         self.providers = providers
         self.budget = budget or BudgetTracker()
         self.routes = routes or DEFAULT_ROUTES
+        self._health: dict[str, ProviderHealth] = {}
 
     async def route(
         self,
@@ -61,11 +76,21 @@ class LLMRouter:
         json_mode: bool = False,
     ) -> LLMResponse:
         """Select provider and execute request with automatic fallback."""
+        now = time.monotonic()
+
         # If explicit provider requested
         if prefer and prefer in self.providers:
             provider = self.providers[prefer]
             if provider.is_available() and self.budget.is_within_budget(prefer):
-                return await self._call(provider, messages, system_prompt, images, max_tokens, temperature, json_mode)
+                health = self._health.get(prefer)
+                if not health or now >= health.circuit_open_until:
+                    try:
+                        response = await self._call(provider, messages, system_prompt, images, max_tokens, temperature, json_mode)
+                        self._record_success(prefer)
+                        return response
+                    except Exception:
+                        self._record_failure(prefer)
+                        logger.exception("Preferred provider %s failed", prefer)
 
         # Get route for this intent
         route = self.routes.get(intent, Route("groq", ["openai"]))
@@ -82,19 +107,57 @@ class LLMRouter:
             if images and not provider.supports_vision():
                 continue
 
+            # Circuit breaker check
+            health = self._health.get(provider_name)
+            if health and now < health.circuit_open_until:
+                logger.info(
+                    "Circuit open for %s (skip for %.0fs more), trying next",
+                    provider_name,
+                    health.circuit_open_until - now,
+                )
+                continue
+
             attempted.append(provider_name)
             try:
                 response = await self._call(provider, messages, system_prompt, images, max_tokens, temperature, json_mode)
                 self.budget.record(provider_name, response.tokens_used)
+                self._record_success(provider_name)
                 return response
             except Exception:
                 logger.exception("Provider %s failed, trying fallback", provider_name)
+                self._record_failure(provider_name)
                 continue
 
         raise RuntimeError(
             f"All LLM providers exhausted for intent={intent.value}, "
             f"tried: {attempted or candidates}"
         )
+
+    def _record_success(self, provider_name: str) -> None:
+        """Reset failure counter on success."""
+        health = self._health.get(provider_name)
+        if health:
+            health.consecutive_failures = 0
+
+    def _record_failure(self, provider_name: str) -> None:
+        """Increment failure counter; open circuit if threshold reached."""
+        now = time.monotonic()
+        health = self._health.get(provider_name)
+        if not health:
+            health = ProviderHealth()
+            self._health[provider_name] = health
+
+        health.consecutive_failures += 1
+        health.last_failure = now
+
+        if health.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD:
+            health.circuit_open_until = now + CIRCUIT_BREAKER_COOLDOWN
+            logger.warning(
+                "Circuit breaker OPEN for %s after %d consecutive failures (cooldown %ds)",
+                provider_name,
+                health.consecutive_failures,
+                CIRCUIT_BREAKER_COOLDOWN,
+            )
 
     async def _call(
         self,

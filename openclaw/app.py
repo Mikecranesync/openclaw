@@ -24,6 +24,7 @@ from openclaw.llm.providers.gemini import GeminiProvider
 from openclaw.llm.providers.groq import GroqProvider
 from openclaw.llm.providers.nvidia import NvidiaProvider
 from openclaw.llm.providers.openai import OpenAIProvider
+from openclaw.llm.providers.deepseek import DeepSeekProvider
 from openclaw.llm.providers.openrouter import OpenRouterProvider
 from openclaw.llm.router import LLMRouter
 from openclaw.messages.intent import classify
@@ -59,6 +60,8 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
         providers["gemini"] = GeminiProvider(config.gemini_api_key, config.gemini_model)
     if config.openrouter_api_key:
         providers["openrouter"] = OpenRouterProvider(config.openrouter_api_key, config.openrouter_model)
+    if config.deepseek_api_key:
+        providers["deepseek"] = DeepSeekProvider(config.deepseek_api_key, config.deepseek_model)
 
     budget = BudgetTracker()
     if config.groq_daily_request_limit:
@@ -173,9 +176,13 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
             telegram_adapter = TelegramAdapter(
                 config.telegram_bot_token, dispatch,
                 allowed_users=config.telegram_allowed_users or None,
+                openai_api_key=config.openai_api_key,
             )
             try:
                 await telegram_adapter.start()
+                app.state.telegram_adapter = telegram_adapter
+                # Wire Telegram send into skill context for background notifications
+                skill_context._telegram_send = telegram_adapter.send
             except Exception:
                 logger.exception("Failed to start Telegram adapter")
 
@@ -196,5 +203,6 @@ def create_app(config: OpenClawConfig | None = None) -> FastAPI:
     app.state.config = config
     app.state.llm_router = llm_router
     app.state.registry = registry
+    app.state.telegram_adapter = None
 
     return app

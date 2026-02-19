@@ -1,0 +1,3 @@
+openclaw:
+  kb_enabled: true
+  kb_postgres_url: "postgresql://rivet:rivet_factory_2025!@localhost:5432/rivet"

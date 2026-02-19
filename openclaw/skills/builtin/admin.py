@@ -1,4 +1,4 @@
-"""AdminSkill — health checks, budget, connector status."""
+"""AdminSkill — health checks, budget, connector status, and help."""
 
 from __future__ import annotations
 
@@ -6,10 +6,43 @@ from openclaw.messages.models import InboundMessage, OutboundMessage
 from openclaw.skills.base import Skill, SkillContext
 from openclaw.types import Intent
 
+HELP_TEXT = (
+    "**Jarvis \u2014 What I Can Do**\n"
+    "\n"
+    "\U0001f50d **Diagnose** \u2014 Ask about faults, alarms, or equipment issues\n"
+    '  _"Why is the motor stopped?"_\n'
+    "\n"
+    "\U0001f4ca **Status** \u2014 Show live PLC tags and I/O\n"
+    '  _"Show me IO"_\n'
+    "\n"
+    "\U0001f4f7 **Photo** \u2014 Analyze equipment from a photo\n"
+    "  _Send a photo with or without caption_\n"
+    "\n"
+    "\U0001f4dd **Diagram** \u2014 Generate wiring diagrams\n"
+    '  _"Draw the 220V power feed"_\n'
+    "\n"
+    "\U0001f50e **Search** \u2014 Look up technical info\n"
+    '  _"Search for Micro820 Ethernet setup"_\n'
+    "\n"
+    "\U0001f4cb **Work Order** \u2014 Create maintenance tasks\n"
+    '  _"Create a WO for motor bearing replacement"_\n'
+    "\n"
+    "\u2699\ufe0f **Admin** \u2014 Health, budget, and system info\n"
+    '  _"budget" or "health"_\n'
+    "\n"
+    "\U0001f4da **KB Enrichment** \u2014 Every photo enriches the knowledge base automatically\n"
+    "\n"
+    "_Tip: Send a photo of any component to add it to the KB._"
+)
+
 
 class AdminSkill(Skill):
     async def handle(self, message: InboundMessage, context: SkillContext) -> OutboundMessage:
         text = message.text.lower().strip()
+
+        # HELP intent — return capabilities guide, not health dump
+        if message.intent == Intent.HELP or text in ("help", "/help", "/start"):
+            return OutboundMessage(channel=message.channel, user_id=message.user_id, text=HELP_TEXT)
 
         if "budget" in text:
             summary = context.llm.budget.summary()
@@ -45,4 +78,4 @@ class AdminSkill(Skill):
         return "admin"
 
     def description(self) -> str:
-        return "System health, budget, and connector status"
+        return "System health, budget, connector status, and help"
