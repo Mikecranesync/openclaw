@@ -23,8 +23,8 @@ from openclaw.tts import synthesize as tts_synthesize
 logger = logging.getLogger(__name__)
 
 # Per-user conversation history settings
-_MAX_HISTORY = 10  # Max messages per user (5 exchanges)
-_HISTORY_TTL = 1800  # 30 minutes — clear stale history
+_MAX_HISTORY = 20  # Max messages per user (10 exchanges)
+_HISTORY_TTL = 3600  # 1 hour — keep multi-photo troubleshooting sessions alive
 
 
 class TelegramAdapter(ChannelAdapter):
@@ -240,6 +240,8 @@ class TelegramAdapter(ChannelAdapter):
         if not user or not self._is_allowed(user.id):
             return
 
+        user_id = str(user.id)
+
         # Show typing indicator
         await update.message.chat.send_action(ChatAction.TYPING)
 
@@ -247,17 +249,31 @@ class TelegramAdapter(ChannelAdapter):
         file = await context.bot.get_file(photo.file_id)
         data = await file.download_as_bytearray()
 
+        # Get conversation history so photo analysis has context
+        history = self._get_history(user_id)
+
         msg = InboundMessage(
             id=str(uuid.uuid4()),
             channel=Channel.TELEGRAM,
-            user_id=str(user.id),
+            user_id=user_id,
             user_name=user.first_name or "",
             text=update.message.caption or "",
             attachments=[Attachment(type="image", data=bytes(data), mime_type="image/jpeg")],
+            metadata={"history": history} if history else {},
         )
+
+        # Store user message in history (note photo was sent)
+        caption = update.message.caption or ""
+        self._add_to_history(user_id, "user", f"[Sent a photo] {caption}".strip())
+
         try:
             response = await self._dispatch(msg)
             await self._reply(update, response.text)
+            # Store photo analysis with higher char limit so context is preserved
+            self._add_to_history(
+                user_id, "assistant",
+                f"[Photo Analysis] {response.text[:1000]}",
+            )
         except Exception:
             logger.exception("photo dispatch failed for user %s", user.id)
             await update.message.reply_text("Error processing request. Logged for review.")

@@ -297,7 +297,12 @@ def _ingest_photo(photo_path: str, tags: Optional[str] = None) -> dict:
     if tags:
         user_prompt += f"\n\nHINT: The component may be tagged as: {tags}"
 
-    # Try Gemini first, then Claude
+    # Try OpenRouter first (most reliable), then Gemini, then Claude
+    try:
+        return _call_openrouter_vision(photo_b64, mime_type, user_prompt)
+    except Exception as e:
+        log.warning("OpenRouter enrichment call failed: %s — trying Gemini", e)
+
     try:
         return _call_gemini_vision(photo_b64, mime_type, user_prompt)
     except Exception as e:
@@ -441,6 +446,50 @@ def _call_claude_vision(photo_b64: str, mime_type: str, user_prompt: str) -> dic
 
     text = response.content[0].text
     return _repair_and_parse_json(text)
+
+
+def _call_openrouter_vision(photo_b64: str, mime_type: str, user_prompt: str) -> dict:
+    """Call OpenRouter (Claude Sonnet) for component OCR."""
+    import os
+
+    from openai import OpenAI
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENROUTER_API_KEY not set")
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://github.com/Mikecranesync/openclaw",
+            "X-Title": "OpenClaw",
+        },
+    )
+
+    media_type = mime_type if mime_type != "image/jpg" else "image/jpeg"
+
+    response = client.chat.completions.create(
+        model="anthropic/claude-sonnet-4",
+        max_tokens=4096,
+        messages=[
+            {"role": "system", "content": ENRICHMENT_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{photo_b64}"},
+                    },
+                    {"type": "text", "text": user_prompt},
+                ],
+            },
+        ],
+    )
+
+    text = response.choices[0].message.content or ""
+    return _repair_and_parse_json(text)
+
 
 
 # ---------------------------------------------------------------------------

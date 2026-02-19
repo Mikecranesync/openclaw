@@ -25,15 +25,16 @@ class DiagnoseSkill(Skill):
         matrix = context.connectors.get("matrix")
         tags: dict = {}
         if matrix:
-            tag_rows = await matrix.get_latest_tags(limit=1)  # type: ignore[attr-defined]
-            if tag_rows:
-                tags = tag_rows[0] if isinstance(tag_rows, list) else tag_rows
+            try:
+                tag_rows = await matrix.get_latest_tags(limit=1)  # type: ignore[attr-defined]
+                if tag_rows:
+                    tags = tag_rows[0] if isinstance(tag_rows, list) else tag_rows
+            except Exception:
+                logger.warning("Matrix API call failed — will attempt KB-only diagnosis")
 
         if not tags:
-            return OutboundMessage(
-                channel=message.channel, user_id=message.user_id,
-                text="Cannot reach PLC data. Is the Matrix API running?",
-            )
+            # Attempt KB-only diagnosis instead of dead-end error
+            return await self._kb_only_fallback(message, context)
 
         # 2. Rule-based fault detection (zero latency)
         faults = detect_faults(tags)
@@ -91,6 +92,74 @@ class DiagnoseSkill(Skill):
             channel=message.channel, user_id=message.user_id,
             text=response_text,
         )
+
+    async def _kb_only_fallback(self, message: InboundMessage, context: SkillContext) -> OutboundMessage:
+        """Attempt KB-only diagnosis when PLC/Matrix data is unavailable."""
+        question = message.text or ""
+        if not question.strip():
+            return OutboundMessage(
+                channel=message.channel, user_id=message.user_id,
+                text="Cannot reach PLC data and no question provided. Is the Matrix API running?",
+            )
+
+        # Search KB using the user's question text
+        kb = context.connectors.get("knowledge")
+        kb_context = ""
+        kb_sources: list[str] = []
+        if kb:
+            try:
+                atoms = await kb.search(question, limit=5)  # type: ignore[attr-defined]
+                for atom in (atoms or []):
+                    title = atom.get("title", "")
+                    summary = atom.get("summary", "")[:300]
+                    source_url = atom.get("source_url", "")
+                    kb_context += f"\n- {title}: {summary}"
+                    if source_url:
+                        kb_sources.append(f"[{title}]({source_url})")
+                    elif title:
+                        kb_sources.append(title)
+            except Exception:
+                logger.exception("KB search failed during KB-only fallback")
+
+        # Build prompt without live tags
+        prompt = (
+            f"A technician is asking about their equipment but live PLC data is unavailable.\n"
+            f"Answer based on your knowledge and any KB context provided.\n\n"
+            f"QUESTION: {question}"
+        )
+        if kb_context:
+            prompt += f"\n\nKNOWLEDGE BASE CONTEXT:{kb_context}"
+
+        # Route to LLM with conversation history
+        history = message.metadata.get("history", [])
+        messages = []
+        for h in history:
+            messages.append({"role": h["role"], "content": h["content"]})
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            response = await context.llm.route(
+                Intent.DIAGNOSE,
+                messages=messages,
+                system_prompt=SYSTEM_PROMPT,
+            )
+            response_text = response.text
+            if kb_sources:
+                response_text += "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in kb_sources)
+            response_text += (
+                f"\n\n_PLC data unavailable — diagnosis based on KB + your description only_"
+                f"\n_Model: {response.model} | {response.latency_ms}ms_"
+            )
+            return OutboundMessage(
+                channel=message.channel, user_id=message.user_id,
+                text=response_text,
+            )
+        except Exception:
+            logger.exception("LLM call failed during KB-only fallback")
+            return OutboundMessage(
+                channel=message.channel, user_id=message.user_id,
+                text="Cannot reach PLC data or AI providers. Is the Matrix API running?",
+            )
 
     def _format_fault_summary(self, faults: list) -> str:
         """Format detected faults into a readable summary for Layer 0 responses."""
